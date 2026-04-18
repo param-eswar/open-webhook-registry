@@ -1,0 +1,779 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aparhub.com/schemas/webhook-provider-spec/v1.0.0",
+  "title": "AparHub Webhook Provider Spec",
+  "description": "Machine-executable specification for a webhook provider's verification requirements. Every field drives engine behaviour \u2014 nothing is documentation-only.",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "slug",
+    "name",
+    "category",
+    "status",
+    "verification",
+    "registration",
+    "test_harness"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version. Pin to exact version \u2014 breaking changes increment major."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "URL-safe unique identifier. Used as catalog lookup key and ingest URL segment."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable provider name shown in UI."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "payment",
+        "devtools",
+        "communication",
+        "crm",
+        "ecommerce",
+        "fintech",
+        "infrastructure",
+        "social",
+        "other"
+      ],
+      "description": "Primary category for catalog filtering."
+    },
+    "region_tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "india",
+          "global",
+          "us",
+          "eu",
+          "apac"
+        ]
+      },
+      "minItems": 1,
+      "description": "Geographic relevance tags. india = India-first providers."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "official",
+        "community",
+        "deprecated"
+      ],
+      "description": "official = AparHub-maintained and CI-verified. community = merged PR, CI-verified. deprecated = no longer recommended."
+    },
+    "tier_required": {
+      "type": "string",
+      "enum": [
+        "starter",
+        "builder",
+        "scale",
+        "enterprise"
+      ],
+      "default": "starter",
+      "description": "Minimum AparHub tier required to use this provider. Asymmetric/JWT = scale. mTLS = enterprise."
+    },
+    "docs_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical documentation URL for this provider's webhook verification."
+    },
+    "ip_allowlist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Provider's published source CIDRs. Pre-filled in customer IP allowlist config. Optional \u2014 omit if provider does not publish IPs."
+    },
+    "standard_webhooks": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set true if provider is Standard Webhooks compliant (webhook-id, webhook-timestamp, webhook-signature headers with id.timestamp.body construction). When true, verification block may omit signing_input and sig_value \u2014 they are fixed by the standard."
+    },
+    "verification": {
+      "type": "object",
+      "description": "Complete verification specification. Drives the engine's strategy chain.",
+      "required": [
+        "primary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "registration_challenge": {
+          "$ref": "#/$defs/RegistrationChallenge",
+          "description": "One-time verification challenge at source registration. Omit if provider does not require it."
+        },
+        "primary": {
+          "$ref": "#/$defs/PrimaryStrategy",
+          "description": "Primary verification strategy executed on every inbound request."
+        },
+        "replay_prevention": {
+          "$ref": "#/$defs/ReplayPrevention",
+          "description": "Replay attack prevention. Omit if provider sends no timestamp or nonce."
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "description": "Fields the customer must provide at source setup. Drives the wizard UI \u2014 every field here becomes a form input.",
+      "required": [
+        "customer_fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "customer_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CustomerField"
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Event types this provider can send. Pre-populates the event filter UI. Optional \u2014 omit for providers with dynamic event catalogs.",
+      "items": {
+        "$ref": "#/$defs/EventType"
+      }
+    },
+    "test_harness": {
+      "$ref": "#/$defs/TestHarness",
+      "description": "MANDATORY. Used by CI to verify spec correctness before merge. No spec without a test harness."
+    }
+  },
+  "$defs": {
+    "PrimaryStrategy": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "discriminator": {
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/HmacStrategy"
+        },
+        {
+          "$ref": "#/$defs/SharedSecretStrategy"
+        },
+        {
+          "$ref": "#/$defs/AsymmetricStrategy"
+        },
+        {
+          "$ref": "#/$defs/JwtStrategy"
+        },
+        {
+          "$ref": "#/$defs/DatalessStrategy"
+        },
+        {
+          "$ref": "#/$defs/MtlsStrategy"
+        }
+      ]
+    },
+    "HmacStrategy": {
+      "type": "object",
+      "title": "HMAC",
+      "description": "Hash-based message authentication. Covers ~65% of providers.",
+      "required": [
+        "type",
+        "algo",
+        "sig_value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hmac"
+        },
+        "algo": {
+          "type": "string",
+          "enum": [
+            "sha256",
+            "sha512",
+            "sha1"
+          ],
+          "description": "Hash algorithm. sha256 strongly preferred. sha1 legacy-only (Facebook, Intercom, Twilio)."
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "base64"
+          ],
+          "default": "hex",
+          "description": "Digest encoding of the computed HMAC before comparison."
+        },
+        "sig_value": {
+          "type": "string",
+          "description": "CEL expression \u2192 string. Extracts the claimed signature from the request. Engine compares this against the computed HMAC digest. Examples: header('X-Razorpay-Signature') | header('Stripe-Signature').extract('v1={s}').s | header('X-Slack-Signature').trimPrefix('v0=')"
+        },
+        "signing_input": {
+          "type": "string",
+          "description": "CEL expression \u2192 bytes|string. Constructs the exact byte sequence that gets fed into HMAC. Omit only when standard_webhooks: true (construction is fixed as id.timestamp.body). Examples: raw_body | header('Stripe-Signature').extract('t={ts}').ts + '.' + raw_body | 'v0:' + header('X-Slack-Request-Timestamp') + ':' + raw_body"
+        },
+        "secret_field": {
+          "type": "string",
+          "description": "Name of the customer_field that holds the HMAC key. Defaults to 'webhook_secret' if omitted."
+        },
+        "secret_encoding": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "base64",
+            "hex"
+          ],
+          "default": "raw",
+          "description": "Encoding of the stored secret before use as HMAC key. Standard Webhooks uses base64 (strip the whsec_ prefix, then base64-decode)."
+        }
+      }
+    },
+    "SharedSecretStrategy": {
+      "type": "object",
+      "title": "Shared Secret",
+      "description": "Static token comparison. No body signing \u2014 weaker than HMAC. Use for providers that send a bearer token or static header value.",
+      "required": [
+        "type",
+        "token_value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "shared_secret"
+        },
+        "token_value": {
+          "type": "string",
+          "description": "CEL expression \u2192 string. Extracts the token from the request. Example: header('Authorization').trimPrefix('Bearer ') | header('X-Webhook-Token') | query('token')"
+        },
+        "comparison": {
+          "type": "string",
+          "enum": [
+            "constant_time",
+            "exact"
+          ],
+          "default": "constant_time",
+          "description": "Always use constant_time to prevent timing attacks. exact is provided for providers that use non-secret tokens."
+        }
+      }
+    },
+    "AsymmetricStrategy": {
+      "type": "object",
+      "title": "Asymmetric Key",
+      "description": "RSA or ECDSA signature verification. Provider signs with private key; AparHub verifies with public key. Requires Scale+ tier.",
+      "required": [
+        "type",
+        "algo",
+        "sig_value",
+        "key_source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "asymmetric"
+        },
+        "algo": {
+          "type": "string",
+          "enum": [
+            "RS256",
+            "RS512",
+            "ES256",
+            "ES512",
+            "EdDSA",
+            "sha256WithRSAEncryption"
+          ],
+          "description": "Signature algorithm. RS256/ES256 most common. PayPal uses sha256WithRSAEncryption."
+        },
+        "sig_value": {
+          "type": "string",
+          "description": "CEL expression \u2192 string (base64). Extracts the claimed signature from the request."
+        },
+        "signing_input": {
+          "type": "string",
+          "description": "CEL expression \u2192 bytes. Constructs the bytes that were signed. For most asymmetric providers this is the raw body. PayPal uses a 4-field concatenation."
+        },
+        "key_source": {
+          "type": "string",
+          "enum": [
+            "jwks_url",
+            "cert_in_header",
+            "static_cert",
+            "cert_url_in_header"
+          ],
+          "description": "How the public key is obtained. jwks_url = fetch from a JWKS endpoint. cert_in_header = public cert URL sent with each request. static_cert = fixed cert in provider settings."
+        },
+        "jwks_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "JWKS endpoint URL. Required when key_source = jwks_url."
+        },
+        "jwks_fetch_method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST"
+          ],
+          "default": "GET",
+          "description": "HTTP method for JWKS fetch. Plaid uses POST."
+        },
+        "cert_header": {
+          "type": "string",
+          "description": "Header containing the public cert URL. Required when key_source = cert_url_in_header. PayPal: PAYPAL-CERT-URL."
+        },
+        "cert_format": {
+          "type": "string",
+          "enum": [
+            "pem",
+            "pkcs8",
+            "cer",
+            "der"
+          ],
+          "default": "pem"
+        },
+        "key_id_field": {
+          "type": "string",
+          "description": "JWT header field or custom header containing the key ID for JWKS lookup. Usually 'kid'."
+        },
+        "cache_ttl_seconds": {
+          "type": "integer",
+          "default": 3600,
+          "description": "How long to cache the public key. On verification failure, force-refresh once before rejecting."
+        },
+        "refresh_on_unknown_key_id": {
+          "type": "boolean",
+          "default": true,
+          "description": "Force refresh the JWKS cache if the key ID is not found. Handles key rotation."
+        }
+      }
+    },
+    "JwtStrategy": {
+      "type": "object",
+      "title": "JWT / OAuth2 / JWK",
+      "description": "JWT-based verification. Requires Scale+ tier.",
+      "required": [
+        "type",
+        "algo",
+        "key_source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "jwt"
+        },
+        "algo": {
+          "type": "string",
+          "enum": [
+            "RS256",
+            "RS512",
+            "ES256",
+            "ES512",
+            "EdDSA",
+            "HS256"
+          ],
+          "description": "JWT signing algorithm."
+        },
+        "jwt_location": {
+          "type": "string",
+          "enum": [
+            "header",
+            "payload_field",
+            "authorization_bearer"
+          ],
+          "default": "authorization_bearer",
+          "description": "Where the JWT lives in the request. header = custom header. payload_field = JWT is the body. authorization_bearer = Authorization: Bearer <jwt>."
+        },
+        "jwt_header": {
+          "type": "string",
+          "description": "Header name when jwt_location = header. Plaid: plaid-verification."
+        },
+        "key_source": {
+          "type": "string",
+          "enum": [
+            "jwks_url",
+            "static_secret",
+            "oauth2_discovery"
+          ],
+          "description": "jwks_url = fetch public keys from JWKS endpoint. static_secret = HMAC JWT with a known secret. oauth2_discovery = fetch from .well-known/openid-configuration."
+        },
+        "jwks_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "jwks_fetch_method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST"
+          ],
+          "default": "GET"
+        },
+        "validate_claims": {
+          "type": "object",
+          "description": "JWT claims to validate beyond signature.",
+          "additionalProperties": false,
+          "properties": {
+            "iss": {
+              "type": "string",
+              "description": "Expected issuer."
+            },
+            "aud": {
+              "type": "string",
+              "description": "Expected audience."
+            },
+            "iat_tolerance_seconds": {
+              "type": "integer",
+              "default": 300,
+              "description": "Max age of issued-at claim. Doubles as replay prevention."
+            }
+          }
+        },
+        "cache_ttl_seconds": {
+          "type": "integer",
+          "default": 3600
+        },
+        "refresh_on_unknown_key_id": {
+          "type": "boolean",
+          "default": true
+        },
+        "key_id_field": {
+          "type": "string",
+          "description": "JWT header field (or custom header) identifying which JWK to use. Usually kid."
+        }
+      }
+    },
+    "DatalessStrategy": {
+      "type": "object",
+      "title": "Dataless Notification",
+      "description": "Provider sends minimal payload (event ID only). AparHub fetches the full event via API callback. Requires Scale+ tier.",
+      "required": [
+        "type",
+        "event_id_path",
+        "fetch_url_template",
+        "auth_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "dataless"
+        },
+        "event_id_path": {
+          "type": "string",
+          "description": "JSON path to the event ID in the minimal payload. Example: id | value[0].subscriptionId"
+        },
+        "fetch_url_template": {
+          "type": "string",
+          "description": "URL template for fetching full event. {event_id} is substituted. Example: https://api.paypal.com/v1/notifications/webhooks-events/{event_id}"
+        },
+        "auth_type": {
+          "type": "string",
+          "enum": [
+            "oauth2_client_credentials",
+            "bearer_token",
+            "api_key_header"
+          ],
+          "description": "Auth method for the callback API request."
+        },
+        "token_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "OAuth2 token endpoint. Required when auth_type = oauth2_client_credentials."
+        },
+        "auth_field_client_id": {
+          "type": "string",
+          "description": "customer_field name for OAuth2 client ID."
+        },
+        "auth_field_client_secret": {
+          "type": "string",
+          "description": "customer_field name for OAuth2 client secret."
+        }
+      }
+    },
+    "MtlsStrategy": {
+      "type": "object",
+      "title": "mTLS",
+      "description": "Mutual TLS \u2014 provider authenticates with a client certificate. Requires Enterprise tier. Handled at AparHub infrastructure level, not per-request.",
+      "required": [
+        "type",
+        "ca_cert_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "mtls"
+        },
+        "ca_cert_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the provider's CA certificate for client cert validation."
+        },
+        "fingerprint_sha256": {
+          "type": "string",
+          "description": "Expected SHA-256 fingerprint of the provider's client certificate. Optional additional pin."
+        }
+      }
+    },
+    "RegistrationChallenge": {
+      "type": "object",
+      "description": "One-time verification challenge sent by the provider when a webhook URL is registered. AparHub handles automatically \u2014 customer never sees it.",
+      "required": [
+        "type",
+        "method",
+        "response_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "one_time_verify"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST"
+          ],
+          "description": "HTTP method used by the provider to send the challenge."
+        },
+        "challenge_param": {
+          "type": "string",
+          "description": "Query parameter or body field containing the challenge value to echo back. Example: hub.challenge"
+        },
+        "mode_param": {
+          "type": "string",
+          "description": "Query param that must equal a specific value for the challenge to be valid. Example: hub.mode (must equal 'subscribe')."
+        },
+        "mode_value": {
+          "type": "string",
+          "description": "Expected value of mode_param. Example: subscribe"
+        },
+        "verify_token_param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Query param provider uses to echo back the verify token. Null for providers that use HMAC on the challenge instead (e.g. Zoom)."
+        },
+        "verify_token_field": {
+          "type": "string",
+          "description": "customer_field name holding the verify token. AparHub validates it matches what the provider sends."
+        },
+        "response_type": {
+          "type": "string",
+          "enum": [
+            "echo_challenge_value",
+            "compute_hash",
+            "json_challenge_value"
+          ],
+          "description": "How to respond to the challenge. echo_challenge_value = return challenge param as plain text. json_challenge_value = return {challenge: <value>}. compute_hash = HMAC-based response (rare)."
+        },
+        "response_content_type": {
+          "type": "string",
+          "default": "text/plain",
+          "description": "Content-Type of the challenge response."
+        }
+      }
+    },
+    "ReplayPrevention": {
+      "type": "object",
+      "description": "Replay attack prevention layer. Applied after primary strategy succeeds.",
+      "required": [
+        "mechanism"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mechanism": {
+          "type": "string",
+          "enum": [
+            "timestamp",
+            "nonce"
+          ],
+          "description": "timestamp = check request timestamp is within tolerance window. nonce = check event ID has not been seen before."
+        },
+        "timestamp_value": {
+          "type": "string",
+          "description": "CEL expression \u2192 int (unix epoch seconds). Extracts the timestamp from the request. Example: int(header('X-Slack-Request-Timestamp')) | int(header('Stripe-Signature').extract('t={ts}').ts)"
+        },
+        "tolerance_seconds": {
+          "type": "integer",
+          "default": 300,
+          "description": "Max age of the timestamp in seconds. Requests older than this are rejected. Default 5 minutes."
+        },
+        "nonce_value": {
+          "type": "string",
+          "description": "CEL expression \u2192 string. Extracts the nonce/event ID from the request for dedup store lookup. Required when mechanism = nonce."
+        },
+        "nonce_ttl_seconds": {
+          "type": "integer",
+          "default": 300,
+          "description": "How long to retain seen nonces. Should be >= tolerance_seconds."
+        }
+      }
+    },
+    "CustomerField": {
+      "type": "object",
+      "description": "A field the customer must provide at source registration. Each field becomes a form input in the setup wizard.",
+      "required": [
+        "name",
+        "label",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Internal key. Referenced in CEL expressions as params.<name> and in strategy secret_field."
+        },
+        "label": {
+          "type": "string",
+          "description": "UI label shown to customer."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "secret",
+            "text",
+            "url",
+            "email",
+            "select"
+          ],
+          "description": "secret = masked input, encrypted at rest. text = plain input. url = validated URL. select = dropdown."
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "help_text": {
+          "type": "string",
+          "description": "Where to find this value in the provider dashboard. Be specific."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "label"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Required when type = select."
+        }
+      }
+    },
+    "EventType": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Event type string as sent by provider. Example: payment.captured"
+        },
+        "description": {
+          "type": "string"
+        },
+        "sample_payload": {
+          "type": "object",
+          "description": "Example payload for this event type."
+        }
+      }
+    },
+    "TestHarness": {
+      "type": "object",
+      "description": "MANDATORY. CI runs the verification engine against this data and asserts the result matches expected_result. A spec without a passing test harness will not be merged.",
+      "required": [
+        "test_secret",
+        "sample_headers",
+        "sample_payload",
+        "expected_result"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "test_secret": {
+          "type": "string",
+          "description": "Known test secret. NOT a real production secret. Used only for CI signature computation."
+        },
+        "sample_headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "HTTP headers exactly as received from the provider in a real request. Include all headers referenced by CEL expressions."
+        },
+        "sample_payload": {
+          "type": "string",
+          "description": "Raw body string exactly as received. Must be the exact bytes \u2014 no re-serialisation."
+        },
+        "expected_result": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "rejected_sig",
+            "rejected_replay",
+            "rejected_challenge"
+          ],
+          "description": "What the verification engine should return for this input. Primary test case should be 'verified'. Add additional harness entries for failure cases."
+        },
+        "additional_cases": {
+          "type": "array",
+          "description": "Additional test cases for failure modes. Tampered payload, expired timestamp, wrong secret etc.",
+          "items": {
+            "type": "object",
+            "required": [
+              "description",
+              "mutate",
+              "expected_result"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "mutate": {
+                "type": "object",
+                "description": "Mutations to apply to the base test case before running. Keys: headers, payload, secret.",
+                "additionalProperties": true
+              },
+              "expected_result": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "rejected_sig",
+                  "rejected_replay",
+                  "rejected_challenge"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

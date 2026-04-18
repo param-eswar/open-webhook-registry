@@ -1,0 +1,38 @@
+name: Spec is incorrect
+description: Report a provider spec that is wrong or out of date
+title: "[Spec bug] <provider slug>"
+labels: ["spec-bug"]
+body:
+  - type: input
+    id: provider_slug
+    attributes:
+      label: Provider slug
+      placeholder: e.g. razorpay
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_is_wrong
+    attributes:
+      label: What is incorrect?
+      description: Describe the specific field(s) that are wrong and what the correct value should be.
+    validations:
+      required: true
+
+  - type: input
+    id: docs_evidence
+    attributes:
+      label: Link to provider documentation confirming the correct value
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Impact
+      options:
+        - Verification silently fails — all webhooks rejected
+        - Verification works for most cases but fails edge cases
+        - Cosmetic — wrong label, help text, or event name
+    validations:
+      required: true

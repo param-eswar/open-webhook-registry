@@ -1,0 +1,45 @@
+name: Validate provider specs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'providers/**'
+      - 'schema/**'
+      - 'tools/**'
+  pull_request:
+    paths:
+      - 'providers/**'
+      - 'schema/**'
+      - 'tools/**'
+
+jobs:
+  validate:
+    name: Validate specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install jsonschema pyyaml
+
+      - name: Validate all specs
+        run: python3 tools/validate_specs.py
+
+      - name: Count providers
+        if: always()
+        run: |
+          TOTAL=$(find providers -name "*.yaml" | wc -l)
+          INDIA=$(find providers/india -name "*.yaml" 2>/dev/null | wc -l)
+          GLOBAL=$(find providers/global -name "*.yaml" 2>/dev/null | wc -l)
+          echo "### Provider count" >> $GITHUB_STEP_SUMMARY
+          echo "| Region | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| India  | $INDIA |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global | $GLOBAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total** | **$TOTAL** |" >> $GITHUB_STEP_SUMMARY

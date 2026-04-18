@@ -1,0 +1,59 @@
+name: New provider request
+description: Request a provider spec that doesn't exist yet
+title: "[Provider request] <provider name>"
+labels: ["provider-request"]
+body:
+  - type: input
+    id: provider_name
+    attributes:
+      label: Provider name
+      placeholder: e.g. Razorpay, Stripe, GitHub
+    validations:
+      required: true
+
+  - type: input
+    id: docs_url
+    attributes:
+      label: Webhook verification documentation URL
+      placeholder: https://docs.example.com/webhooks/verify
+    validations:
+      required: true
+
+  - type: dropdown
+    id: strategy
+    attributes:
+      label: Verification strategy (if known)
+      options:
+        - HMAC
+        - Shared secret / bearer token
+        - Asymmetric key (RSA/ECDSA)
+        - JWT / JWK
+        - Dataless notification
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: region
+    attributes:
+      label: Primary region
+      options:
+        - India
+        - Global
+        - US
+        - EU
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Why do you need this provider?
+      placeholder: Integrating with X for payments / notifications / etc.
+
+  - type: checkboxes
+    id: willing_to_contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to write the spec and open a PR
