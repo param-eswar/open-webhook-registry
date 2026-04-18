@@ -28,14 +28,14 @@ The full JSON Schema is at [`schema/provider-spec.schema.json`](schema/provider-
 
 **`verification.primary`** — the primary strategy. One of:
 
-| Type | Description | Tier |
-|---|---|---|
-| `hmac` | HMAC-SHA256/SHA512/SHA1 signature | Starter |
-| `shared_secret` | Static token comparison | Starter |
-| `asymmetric` | RSA/ECDSA/EdDSA signature | Scale+ |
-| `jwt` | JWT validation with JWK | Scale+ |
-| `dataless` | Minimal payload — fetch full event via API | Scale+ |
-| `mtls` | Mutual TLS client certificate | Enterprise |
+| Type | Description |
+|---|---|
+| `hmac` | HMAC-SHA256/SHA512/SHA1 signature |
+| `shared_secret` | Static token comparison |
+| `asymmetric` | RSA/ECDSA/EdDSA signature |
+| `jwt` | JWT validation with JWK |
+| `dataless` | Minimal payload — fetch full event via API |
+| `mtls` | Mutual TLS client certificate |
 
 **`verification.registration_challenge`** — one-time verification run at source setup (Facebook, Zoom). Handled automatically by AparHub.
 
@@ -61,25 +61,25 @@ crc32(x)          — CRC32 checksum
 ## Provider catalog
 
 ### India
-| Provider | Strategy | Replay | Tier |
-|---|---|---|---|
-| [Razorpay](providers/india/razorpay.yaml) | HMAC-SHA256 hex | — | Starter |
-| [Cashfree](providers/india/cashfree.yaml) | HMAC-SHA256 base64 | Timestamp | Starter |
-| [PayU](providers/india/payu.yaml) | SHA-512 hex | — | Starter |
-| [PhonePe](providers/india/phonepe.yaml) | SHA-256 hex | — | Starter |
-| [Juspay](providers/india/juspay.yaml) | HMAC-SHA256 base64 | — | Starter |
-| [BillDesk](providers/india/billdesk.yaml) | HMAC-SHA256 hex | — | Starter |
+| Provider | Strategy | Replay |
+|---|---|---|
+| [Razorpay](providers/india/razorpay.yaml) | HMAC-SHA256 hex | — |
+| [Cashfree](providers/india/cashfree.yaml) | HMAC-SHA256 base64 | Timestamp |
+| [PayU](providers/india/payu.yaml) | SHA-512 hex | — |
+| [PhonePe](providers/india/phonepe.yaml) | SHA-256 hex | — |
+| [Juspay](providers/india/juspay.yaml) | HMAC-SHA256 base64 | — |
+| [BillDesk](providers/india/billdesk.yaml) | HMAC-SHA256 hex | — |
 
 ### Global
-| Provider | Strategy | Add-ons | Tier |
-|---|---|---|---|
-| [Stripe](providers/global/stripe.yaml) | HMAC-SHA256 hex | Replay (timestamp) | Starter |
-| [GitHub](providers/global/github.yaml) | HMAC-SHA256 hex | — | Starter |
-| [Slack](providers/global/slack.yaml) | HMAC-SHA256 hex | Replay (timestamp) | Starter |
-| [Facebook](providers/global/facebook.yaml) | HMAC-SHA1 hex | One-time verify | Starter |
-| [Shopify](providers/global/shopify.yaml) | HMAC-SHA256 base64 | — | Starter |
-| [PayPal](providers/global/paypal.yaml) | Asymmetric RSA | — | Scale+ |
-| [Plaid](providers/global/plaid.yaml) | JWT ES256 (JWK) | — | Scale+ |
+| Provider | Strategy | Add-ons |
+|---|---|---|
+| [Stripe](providers/global/stripe.yaml) | HMAC-SHA256 hex | Replay (timestamp) |
+| [GitHub](providers/global/github.yaml) | HMAC-SHA256 hex | — |
+| [Slack](providers/global/slack.yaml) | HMAC-SHA256 hex | Replay (timestamp) |
+| [Facebook](providers/global/facebook.yaml) | HMAC-SHA1 hex | One-time verify |
+| [Shopify](providers/global/shopify.yaml) | HMAC-SHA256 base64 | — |
+| [PayPal](providers/global/paypal.yaml) | Asymmetric RSA | — |
+| [Plaid](providers/global/plaid.yaml) | JWT ES256 (JWK) | — |
 
 ---
 
