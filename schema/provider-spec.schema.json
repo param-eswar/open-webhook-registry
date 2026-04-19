@@ -50,11 +50,7 @@
       "items": {
         "type": "string",
         "enum": [
-          "india",
-          "global",
-          "us",
-          "eu",
-          "apac"
+          "in", "sg", "my", "au", "ae", "gb", "us", "eu", "global"
         ]
       },
       "minItems": 1,
